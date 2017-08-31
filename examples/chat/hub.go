@@ -4,6 +4,10 @@
 
 package main
 
+import (
+	"log"
+)
+
 // hub maintains the set of active clients and broadcasts messages to the
 // clients.
 type Hub struct {
@@ -44,6 +48,7 @@ func (h *Hub) run() {
 				select {
 				case client.send <- message:
 				default:
+					log.Println("close client")
 					close(client.send)
 					delete(h.clients, client)
 				}

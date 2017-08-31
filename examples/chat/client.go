@@ -6,12 +6,18 @@ package main
 
 import (
 	"bytes"
+	"github.com/gorilla/websocket"
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
+
+// Define our message object
+type Message struct {
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Message  string `json:"message"`
+}
 
 const (
 	// Time allowed to write a message to the peer.
@@ -132,6 +138,62 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
-	go client.writePump()
+	// go client.writePump()
 	go client.readPump()
+	go client.testMsg()
+}
+
+func (c *Client) testMsg() {
+
+	// tick := time.Tick(16000 * time.Millisecond)
+	dotTick := time.NewTicker( 1000 * time.Millisecond)
+	tickSend := time.Tick(1000 * time.Millisecond)
+	boom := time.After(11500 * 20 * time.Millisecond)
+	ticker := time.NewTicker(pingPeriod)
+
+	defer func() {
+		log.Println("defer ticker")
+		ticker.Stop()
+		dotTick.Stop()
+		c.conn.Close()
+	}()
+
+	for {
+		select {
+		case <-ticker.C:
+			log.Println("tick.")
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+
+			if err := c.conn.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+				log.Println("ping fail")
+				return
+			}
+		case <-boom:
+			log.Println("BOOM!")
+		case <-tickSend:
+			log.Println("send")
+
+			var msg Message
+			//need set write wait period
+			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+
+			msg.Email = "var 1"
+			msg.Username = "var 2"
+			msg.Message = `{"jsonrpc":"2.0"}`
+
+			err := c.conn.WriteJSON(msg)
+
+			if err != nil {
+				log.Println(err)
+				// The hub closed the channel.
+				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+			}
+		case <-dotTick.C:
+			log.Println(".")
+		default:
+			log.Println("    .")
+			time.Sleep(1000 * time.Millisecond)
+		}
+	}
+
 }
